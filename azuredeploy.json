@@ -81,10 +81,10 @@
         "subnets": { 
             "type": "array", 
             "defaultValue": [ 
-                "gatewaySubnet", 
-                "dmzSubnet", 
-                "applicationSubnet",
-                "dataSubnet" 
+                "gatewaySubnetProd", 
+                "dmzSubnetProd, 
+                "applicationSubnetProd",
+                "dataSubnetProd" 
             ] 
         },
         "subnetprefixes": { 
