@@ -57,7 +57,7 @@
         },
         "vmName": {
             "type": "string",
-            "default": "rdpjumpserver01",
+            "defaultValue": "rdpjumpserver01",
             "maxLength": 64,
             "metadata": {
                 "description": "User name for the Virtual Machine."
