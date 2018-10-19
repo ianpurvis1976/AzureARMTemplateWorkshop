@@ -82,7 +82,7 @@
             "type": "array", 
             "defaultValue": [ 
                 "gatewaySubnetProd", 
-                "dmzSubnetProd, 
+                "dmzSubnetProd,"
                 "applicationSubnetProd",
                 "dataSubnetProd" 
             ] 
