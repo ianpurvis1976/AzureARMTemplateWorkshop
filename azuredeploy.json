@@ -103,7 +103,7 @@
         "asgId": "[resourceId('Microsoft.Network/applicationSecurityGroups',variables('asgName'))]",
         "nsgName": "webNsg",
         "nsgId": "[resourceId('Microsoft.Network/networkSecurityGroups',variables('nsgName'))]",
-        "storageAccountName": "[concat(uniquestring(resourceGroupName().id), 'mandb')]",
+        "storageAccountName": "[concat(uniquestring(parameters.resourceGroupName().id), 'mandb')]",
         "storageAccountType": "Standard_LRS",
         "imagePublisher": "MicrosoftWindowsServer",
         "imageOffer": "WindowsServer",
