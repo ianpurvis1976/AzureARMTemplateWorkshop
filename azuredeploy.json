@@ -82,7 +82,7 @@
             "type": "array", 
             "defaultValue": [ 
                 "gatewaySubnetTest", 
-                "dmzSubnetTest,"
+                "dmzSubnetTest",
                 "applicationSubnetTest",
                 "dataSubnetTest" 
             ] 
