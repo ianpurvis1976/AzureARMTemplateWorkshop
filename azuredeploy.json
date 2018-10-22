@@ -125,7 +125,7 @@
           },
           "appPublicIPName": {
             "type": "string",
-            "defaultValue": "AppWebPublicIP",
+            "defaultValue": "AppWeb-pip",
             "metadata": {
               "description": "Public IP Name"
             }
@@ -136,10 +136,14 @@
         "gwSubnet": "gatewaySubnet",
         "appSubnet": "applicationSubnet",
         "dataSubnet": "dataSubnet",
-        "asgName": "webServersAsg",
-        "asgId": "[resourceId('Microsoft.Network/applicationSecurityGroups',variables('asgName'))]",
-        "nsgName": "webNsg",
-        "nsgId": "[resourceId('Microsoft.Network/networkSecurityGroups',variables('nsgName'))]",
+        "rdpAsgName": "rdpServersAsg",
+        "rdpAsgId": "[resourceId('Microsoft.Network/applicationSecurityGroups',variables('rdpAsgName'))]",
+        "rdpNsgName": "rdpWebNsg",
+        "rdpNsgId": "[resourceId('Microsoft.Network/networkSecurityGroups',variables('rdpNsgName'))]",
+        "appAsgName": "appServersAsg",
+        "appAsgId": "[resourceId('Microsoft.Network/applicationSecurityGroups',variables('appAsgName'))]",
+        "appNsgName": "appWebNsg",
+        "apprdpNsgId": "[resourceId('Microsoft.Network/networkSecurityGroups',variables('appNsgName'))]",
         "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'mandb')]",
         "storageAccountType": "Standard_LRS",
         "imagePublisher": "MicrosoftWindowsServer",
@@ -163,7 +167,7 @@
     },
     "resources": [
         {
-          "name": "[variables('asgName')]",
+          "name": "[variables('rdpAsgName')]",
           "type": "Microsoft.Network/applicationSecurityGroups",
           "apiVersion": "2018-08-01",
           "location": "[parameters('location')]",
@@ -172,13 +176,13 @@
         },
         {
           "comments": "Network Security Group",
-          "name": "[variables('nsgName')]",
+          "name": "[variables('rdpNsgName')]",
           "type": "Microsoft.Network/networkSecurityGroups",
           "apiVersion": "2018-08-01",
           "location": "[parameters('location')]",
           "dependsOn": [
-            "[variables('asgName')]",
-            "[resourceId('Microsoft.Network/applicationSecurityGroups/', variables('asgName'))]"
+            "[variables('rdpAsgName')]",
+            "[resourceId('Microsoft.Network/applicationSecurityGroups/', variables('rdpAsgName'))]"
           ],
           "properties": {
             "securityRules": [
@@ -195,7 +199,7 @@
                   "destinationPortRange": "80",
                   "destinationApplicationSecurityGroups": [
                     {
-                      "id": "[variables('asgId')]"
+                      "id": "[variables('rdpAsgId')]"
                     }
                   ]
                 }
@@ -204,7 +208,7 @@
                 "name": "AllowRDPForIan",
                 "properties": {
                   "description": "Allow RDP traffic to web servers",
-                  "sourceAddressPrefix": "5.69.243.59/24",
+                  "sourceAddressPrefix": "5.69.243.59",
                   "sourcePortRange": "*",
                   "direction": "Inbound",
                   "access": "Allow",
@@ -213,7 +217,7 @@
                   "destinationPortRange": "3389",
                   "destinationApplicationSecurityGroups": [
                     {
-                      "id": "[variables('asgId')]"
+                      "id": "[variables('rdpAsgId')]"
                     }
                   ]
                 }
@@ -221,6 +225,65 @@
             ]
           }
         },
+        {
+          "name": "[variables('appAsgName')]",
+          "type": "Microsoft.Network/applicationSecurityGroups",
+          "apiVersion": "2018-08-01",
+          "location": "[parameters('location')]",
+          "properties": {}
+        },
+        {
+          "comments": "Network Security Group",
+          "name": "[variables('appNsgName')]",
+          "type": "Microsoft.Network/networkSecurityGroups",
+          "apiVersion": "2018-08-01",
+          "location": "[parameters('location')]",
+          "dependsOn": [
+            "[variables('appAsgName')]",
+            "[resourceId('Microsoft.Network/applicationSecurityGroups/', variables('appAsgName'))]"
+          ],
+          "properties": {
+            "securityRules": [
+              {
+                "name": "AllowHttpAll",
+                "properties": {
+                  "description": "Allow http traffic to web servers",
+                  "sourceAddressPrefix": "*",
+                  "sourcePortRange": "*",
+                  "direction": "Inbound",
+                  "access": "Allow",
+                  "priority": 100,
+                  "protocol": "Tcp",
+                  "destinationPortRange": "80",
+                  "destinationApplicationSecurityGroups": [
+                    {
+                      "id": "[variables('appAsgId')]"
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "AllowRDPForIan",
+                "properties": {
+                  "description": "Allow RDP traffic to web servers",
+                  "sourceAddressPrefix": "5.69.243.59",
+                  "sourcePortRange": "*",
+                  "direction": "Inbound",
+                  "access": "Allow",
+                  "priority": 200,
+                  "protocol": "Tcp",
+                  "destinationPortRange": "3389",
+                  "destinationApplicationSecurityGroups": [
+                    {
+                      "id": "[variables('appAsgId')]"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+      
         {
             "type": "Microsoft.Storage/storageAccounts",
             "name": "[variables('storageAccountName')]",
@@ -258,7 +321,7 @@
             "properties": {
                 "ipConfigurations": [
                     {
-                        "name": "ipconfig1",
+                        "name": "ipconfigdmz",
                         "properties": {
                           "privateIPAllocationMethod": "Dynamic",
                           "publicIPAddress": {
@@ -269,7 +332,7 @@
                           },
                           "applicationSecurityGroups": [
                             {
-                              "id": "[variables('asgId')]"
+                              "id": "[variables('rdpAsgId')]"
                             }
                           ]
                         }
@@ -353,7 +416,7 @@
             "dependsOn": [
               "[parameters('vnetName')]",
               "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]",
-              "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('nsgName'))]"
+              "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('rdpNsgName'))]"
             ],
             "location": "[parameters('location')]", 
             "name": "[concat(parameters('vnetName'),'/',parameters('subnets')[copyIndex()])]",
@@ -366,7 +429,7 @@
               "properties": {
                 "addressPrefix": "[parameters('subnetprefixes')[copyIndex()]]",
                 "networkSecurityGroup": {
-                  "id": "[variables('nsgId')]"
+                  "id": "[variables('rdpNsgId')]"
                 }
               
               }   
@@ -417,6 +480,11 @@
                     "subnet": {
                       "id": "[variables('appSubnetId')]"
                     },
+                    "applicationSecurityGroups": [
+                        {
+                          "id": "[variables('appAsgId')]"
+                        }
+                    ],
                     "loadBalancerBackendAddressPools": [
                       {
                         "id": "[concat(variables('appLbID'), '/backendAddressPools/BackendPool1')]"
