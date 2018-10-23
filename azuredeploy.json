@@ -24,7 +24,6 @@
                 "description": "CIDR address space for the virtual network"
             }
         },
-
         "adminUsername": {
             "type": "string",
             "metadata": {
@@ -102,34 +101,47 @@
             "metadata": {
               "description": "Load Balancer name"
             }
-          },
+        },
         "appDnsNameforLBIP": {
             "type": "string",
             "metadata": {
               "description": "DNS for Load Balancer IP"
             }
-          },
-          "appVMPrefix": {
+        },
+        "appVMPrefix": {
             "type": "string",
             "defaultValue": "appwebiis",
             "metadata": {
               "description": "Prefix to use for VM names"
             }
-          },
-          "appNicPrefix": {
+        },
+        "appNicPrefix": {
             "type": "string",
             "defaultValue": "AppWebnic",
             "metadata": {
               "description": "Network Interface name prefix"
             }
-          },
-          "appPublicIPName": {
+        },
+        "appPublicIPName": {
             "type": "string",
             "defaultValue": "AppWeb-pip",
             "metadata": {
               "description": "Public IP Name"
             }
-          }
+        },
+        "modulesUrl": {
+            "type": "string",
+            "metadata": {
+                "description": "URL for the DSC configuration module. NOTE: Can be a Github url(raw) to the zip file"
+            }
+        },
+        "configurationFunction": {
+            "type": "string",
+            "defaultValue": "ContosoWebsite.ps1\\ContosoWebsite",
+            "metadata": {
+            "description": "DSC configuration function to call"
+        }
+      }
     },
     "variables": {
         "dmzSubnet": "dmzSubnet",
@@ -163,7 +175,8 @@
         "appLbID": "[resourceId('Microsoft.Network/loadBalancers',parameters('appLbName'))]",
         "frontEndIPConfigID": "[concat(variables('appLbID'),'/frontendIPConfigurations/LoadBalancerFrontEnd')]",
         "lbPoolID": "[concat(variables('appLbID'),'/backendAddressPools/BackendPool1')]",
-        "lbProbeID": "[concat(variables('appLbID'),'/probes/tcpProbe')]"
+        "lbProbeID": "[concat(variables('appLbID'),'/probes/tcpProbe')]",
+        "vmExtensionName": "dscExtension"
     },
     "resources": [
         {
@@ -396,7 +409,7 @@
             }
         },
         {
-            "apiVersion": "2017-06-01",
+            "apiVersion": "2018-08-01",
             "type": "Microsoft.Network/virtualNetworks",
             "name": "[parameters('vnetName')]",
             "dependsOn" : [
@@ -411,7 +424,7 @@
             }
           },
           {
-            "apiVersion": "2017-06-01",
+            "apiVersion": "2018-08-01",
             "type": "Microsoft.Network/virtualNetworks/subnets",
             "dependsOn": [
               "[parameters('vnetName')]",
@@ -635,6 +648,33 @@
                   "storageUri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2016-01-01').primaryEndpoints.blob)]"
                 }
               }
+            }
+          },
+          {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "name": "[concat(parameters('appVMPrefix'),copyIndex(),'/', variables('vmExtensionName'))]",
+            "apiVersion": "2018-06-01",
+            "copy": {
+              "name": "virtualMachineIISLoop",
+              "count": "[variables('appVMInstances')]"
+            },
+            "location": "[parameters('location')]",
+            "dependsOn": [
+              "[concat('Microsoft.Compute/virtualMachines/', parameters('appVmPrefix'),copyIndex())]"
+            ],
+            "properties": {
+              "publisher": "Microsoft.Powershell",
+              "type": "DSC",
+              "typeHandlerVersion": "2.19",
+              "autoUpgradeMinorVersion": true,
+              "settings": {
+                "ModulesUrl": "[parameters('modulesUrl')]",
+                "ConfigurationFunction": "[parameters('configurationFunction')]",
+                "Properties": {
+                  "MachineName": "[concat(parameters('appVmPrefix'), copyIndex())]"
+                }
+              },
+              "protectedSettings": null
             }
           }
     ]

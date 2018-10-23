@@ -36,3 +36,6 @@ az group deployment create --mode Complete --parameters azuredeploy.parameters.j
 az group deployment create --parameters azuredeploy.parameters.json --parameters vmName=RDPJumpServer numberOfDataDisks=1 dnsLabelPrefix=ianpurvistest1232 --template-file azuredeploy.json --resource-group $rg --name $job
 
 az network nic create --resource-group $rg --name rdpjumpserver-nic --subnet dmzSubnet --vnet-name MitchellsAndButlersVnet
+
+az
+group deployment create --parameters azuredeploy.parameters.json --parameters vmName=RDPJumpServer numberOfDataDisks=1 dnsLabelPrefix=ianpurvistest1232 appDnsNameforLBIP=mywebappip123 --template-file azuredeploy.json --resource-group $rg --name $job
