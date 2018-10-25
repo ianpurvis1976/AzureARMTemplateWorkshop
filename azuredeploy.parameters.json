@@ -2,10 +2,7 @@
     "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "vnetName" : {
-            "value" : "MitchellsAndButlersVnet"
-        },
-        
+               
         "adminUsername": {
             "value": "ian"
         },
@@ -25,6 +22,35 @@
         },
         "configurationFunction": {
             "value": "ContosoWebsite.ps1\\ContosoWebsite"
+        },
+        "VNetSettings":{
+            "value":{
+                "name":"infrastructureVNET",
+                "addressPrefixes": [
+                    {
+                        "name": "vnetPrefix",
+                        "addressPrefix": "10.1.0.0/16"
+                    }
+                ],
+                "subnets":[
+                    {
+                        "name": "gatewaySubnet",
+                        "addressPrefix": "10.1.0.0/29"
+                    },
+                    {
+                        "name":"dmzSubnet",
+                        "addressPrefix":"10.1.1.0/27"
+                    },
+                    {
+                      "name":"appSubnet",
+                      "addressPrefix":"10.1.2.0/24"
+                    },
+                    {
+                      "name":"dataSubnet",
+                      "addressPrefix":"10.1.3.0/26"
+                    }
+                ]
+            }
         }
     }
 }

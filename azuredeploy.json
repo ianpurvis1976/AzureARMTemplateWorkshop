@@ -155,7 +155,7 @@
         "appAsgName": "appServersAsg",
         "appAsgId": "[resourceId('Microsoft.Network/applicationSecurityGroups',variables('appAsgName'))]",
         "appNsgName": "appWebNsg",
-        "apprdpNsgId": "[resourceId('Microsoft.Network/networkSecurityGroups',variables('appNsgName'))]",
+        "appNsgId": "[resourceId('Microsoft.Network/networkSecurityGroups',variables('appNsgName'))]",
         "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'mandb')]",
         "storageAccountType": "Standard_LRS",
         "imagePublisher": "MicrosoftWindowsServer",
@@ -176,7 +176,16 @@
         "frontEndIPConfigID": "[concat(variables('appLbID'),'/frontendIPConfigurations/LoadBalancerFrontEnd')]",
         "lbPoolID": "[concat(variables('appLbID'),'/backendAddressPools/BackendPool1')]",
         "lbProbeID": "[concat(variables('appLbID'),'/probes/tcpProbe')]",
-        "vmExtensionName": "dscExtension"
+        "vmExtensionName": "dscExtension",
+        "nsgIDs": { 
+          "type": "array", 
+          "value": [ 
+              "[variables('rdpNsgId')]", 
+              "[variables('appNsgId')]",
+              "[variables('rdpNsgId')]", 
+              "[variables('appNsgId')]"
+          ] 
+        }
     },
     "resources": [
         {
@@ -429,7 +438,8 @@
             "dependsOn": [
               "[parameters('vnetName')]",
               "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]",
-              "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('rdpNsgName'))]"
+              "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('rdpNsgName'))]",
+              "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('appNsgName'))]"
             ],
             "location": "[parameters('location')]", 
             "name": "[concat(parameters('vnetName'),'/',parameters('subnets')[copyIndex()])]",
@@ -442,7 +452,7 @@
               "properties": {
                 "addressPrefix": "[parameters('subnetprefixes')[copyIndex()]]",
                 "networkSecurityGroup": {
-                  "id": "[variables('rdpNsgId')]"
+                  "id": "[variables('nsgIDs')[copyIndex()]]"
                 }
               
               }   
@@ -481,7 +491,7 @@
               "count": "[variables('appVMInstances')]"
             },
             "dependsOn": [
-              "[variables('dmzSubnetId')]",
+              "[variables('appSubnetId')]",
               "[concat('Microsoft.Network/loadBalancers/', parameters('appLbName'))]"
             ],
             "properties": {
