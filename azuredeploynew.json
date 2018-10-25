@@ -339,20 +339,20 @@
                     {
                         "name": "ipconfigdmz",
                         "properties": {
-                          "privateIPAllocationMethod": "Dynamic",
-                          "publicIPAddress": {
-                            "id": "[variables('pipId')]"
-                          },
-                          "subnet": {
-                            "id": "[variables('dmzSubnetId')]"
-                          },
-                          "applicationSecurityGroups": [
-                            {
-                              "id": "[variables('rdpAsgId')]"
-                            }
-                          ]
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIPAddress": {
+                                "id": "[variables('pipId')]"
+                            },
+                            "subnet": {
+                                "id": "[variables('dmzSubnetId')]"
+                            },
+                            "applicationSecurityGroups": [
+                                {
+                                    "id": "[variables('rdpAsgId')]"
+                                }
+                            ]
                         }
-                      }
+                    }
                 ]
             }
         },
@@ -385,16 +385,18 @@
                         "name": "[concat(parameters('vmName'),'-osdisk')]",
                         "createOption": "FromImage"
                     },
-                    "copy": [{
-                        "name": "dataDisks",
-                        "count": "[parameters('numberofDataDisks')]",
-                        "input": {
-                            "name": "[concat(parameters('vmName'),'-dataDisk', padleft(copyIndex('dataDisks'),2,'0'))]",
-                            "diskSizeGB": 1023,
-                            "lun": "[copyIndex('dataDisks')]",
-                            "createOption": "Empty"
-                        }
-                    }]
+                    "copy": [
+                        {
+                            "name": "dataDisks",
+                            "count": "[parameters('numberofDataDisks')]",
+                            "input": {
+                                "name": "[concat(parameters('vmName'),'-dataDisk', padleft(copyIndex('dataDisks'),2,'0'))]",
+                                "diskSizeGB": 1023,
+                                "lun": "[copyIndex('dataDisks')]",
+                                "createOption": "Empty"
+                            }
+                        }    
+                    ]
                 },
                 "networkProfile": {
                     "networkInterfaces": [
@@ -416,17 +418,17 @@
             "type": "Microsoft.Network/virtualNetworks",
             "name": "[parameters('VNetSettings').name]",
             "dependsOn": [
-              "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('rdpNsgName'))]",
-              "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('appNsgName'))]"
+                "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('rdpNsgName'))]",
+                "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('appNsgName'))]"
             ],
             "location": "[parameters('location')]",
             "properties": {
-              "addressSpace": {
-                "addressPrefixes": [
-                  "[parameters('VNetSettings').addressPrefixes[0].addressPrefix]"
-                ]
-              },
-              "subnets":[
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[parameters('VNetSettings').addressPrefixes[0].addressPrefix]"
+                    ]
+                },
+                "subnets":[
                     {
                         "name":"[parameters('VNetSettings').subnets[0].name]",
                         "properties": {
@@ -457,242 +459,241 @@
                             "addressPrefix": "[parameters('VNetSettings').subnets[3].addressPrefix]"
                         }
                     }
-              ]
+                ]
             }
         },
-        
         {
             "type": "Microsoft.Compute/availabilitySets",
             "name": "[variables('appAvailabilitySetName')]",
             "apiVersion": "2018-06-01",
             "location": "[parameters('location')]",
             "properties": {
-              "platformFaultDomainCount": 2,
-              "platformUpdateDomainCount": 2
+                "platformFaultDomainCount": 2,
+                "platformUpdateDomainCount": 2
             },
             "sku": {
-                "name": "Aligned"}
-          },
-          {
+                "name": "Aligned"
+            }
+        },
+        {
             "apiVersion": "2018-06-01",
             "type": "Microsoft.Network/publicIPAddresses",
             "name": "[parameters('appPublicIPName')]",
             "location": "[parameters('location')]",
             "properties": {
-              "publicIPAllocationMethod": "[variables('pipType')]",
-              "dnsSettings": {
-                "domainNameLabel": "[parameters('appDnsNameforLBIP')]"
-              }
+                "publicIPAllocationMethod": "[variables('pipType')]",
+                "dnsSettings": {
+                    "domainNameLabel": "[parameters('appDnsNameforLBIP')]"
+                }
             }
-          },
-          {
+        },
+        {
             "apiVersion": "2017-09-01",
             "type": "Microsoft.Network/networkInterfaces",
             "name": "[concat(parameters('appNicPrefix'), copyindex())]",
             "location": "[parameters('location')]",
             "copy": {
-              "name": "nicLoop",
-              "count": "[variables('appVMInstances')]"
-              
+                "name": "nicLoop",
+                "count": "[variables('appVMInstances')]"
             },
             "dependsOn": [
-              "[concat('Microsoft.Network/loadBalancers/', parameters('appLbName'))]",
-              "[resourceId('Microsoft.Network/virtualNetworks/',variables('vnetName'))]",
-              "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('appNsgName'))]"
+                "[concat('Microsoft.Network/loadBalancers/', parameters('appLbName'))]",
+                "[resourceId('Microsoft.Network/virtualNetworks/',variables('vnetName'))]",
+                "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('appNsgName'))]"
             ],
             "properties": {
-              "ipConfigurations": [
-                {
-                  "name": "ipconfigApp",
-                  "properties": {
-                    "privateIPAllocationMethod": "Dynamic",
-                    "subnet": {
-                      "id": "[variables('appSubnetId')]"
-                    },
-                    "applicationSecurityGroups": [
-                        {
-                          "id": "[variables('appAsgId')]"
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfigApp",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('appSubnetId')]"
+                            },
+                            "applicationSecurityGroups": [
+                                {
+                                    "id": "[variables('appAsgId')]"
+                                }
+                            ],
+                            "loadBalancerBackendAddressPools": [
+                                {
+                                    "id": "[concat(variables('appLbID'), '/backendAddressPools/BackendPool1')]"
+                                }
+                            ],
+                            "loadBalancerInboundNatRules": [
+                                {
+                                    "id": "[concat(variables('appLbID'),'/inboundNatRules/RDP-VM', copyindex())]"
+                                }
+                            ]
                         }
-                    ],
-                    "loadBalancerBackendAddressPools": [
-                      {
-                        "id": "[concat(variables('appLbID'), '/backendAddressPools/BackendPool1')]"
-                      }
-                    ],
-                    "loadBalancerInboundNatRules": [
-                      {
-                        "id": "[concat(variables('appLbID'),'/inboundNatRules/RDP-VM', copyindex())]"
-                      }
-                    ]
-                  }
-                }
-              ]
+                    }
+                ]
             }
-          },
-          {
+        },
+        {
             "apiVersion": "2018-08-01",
             "name": "[parameters('appLbName')]",
             "type": "Microsoft.Network/loadBalancers",
             "location": "[parameters('location')]",
             "dependsOn": [
-              "[concat('Microsoft.Network/publicIPAddresses/', parameters('appPublicIPName'))]"
+                "[concat('Microsoft.Network/publicIPAddresses/', parameters('appPublicIPName'))]"
             ],
             "properties": {
-              "frontendIPConfigurations": [
-                {
-                  "name": "LoadBalancerFrontEnd",
-                  "properties": {
-                    "publicIPAddress": {
-                      "id": "[variables('appPublicIPAddressID')]"
+                "frontendIPConfigurations": [
+                    {
+                        "name": "LoadBalancerFrontEnd",
+                        "properties": {
+                            "publicIPAddress": {
+                                "id": "[variables('appPublicIPAddressID')]"
+                            }
+                        }
                     }
-                  }
-                }
-              ],
-              "backendAddressPools": [
-                {
-                  "name": "BackendPool1"
-                }
-              ],
-              "inboundNatRules": [
-                {
-                  "name": "RDP-VM0",
-                  "properties": {
-                    "frontendIPConfiguration": {
-                      "id": "[variables('frontEndIPConfigID')]"
-                    },
-                    "protocol": "tcp",
-                    "frontendPort": 50001,
-                    "backendPort": 3389,
-                    "enableFloatingIP": false
-                  }
-                },
-                {
-                  "name": "RDP-VM1",
-                  "properties": {
-                    "frontendIPConfiguration": {
-                      "id": "[variables('frontEndIPConfigID')]"
-                    },
-                    "protocol": "tcp",
-                    "frontendPort": 50002,
-                    "backendPort": 3389,
-                    "enableFloatingIP": false
-                  }
-                }
-              ],
-              "loadBalancingRules": [
-                {
-                  "name": "LBRule",
-                  "properties": {
-                    "frontendIPConfiguration": {
-                      "id": "[variables('frontEndIPConfigID')]"
-                    },
-                    "backendAddressPool": {
-                      "id": "[variables('lbPoolID')]"
-                    },
-                    "protocol": "tcp",
-                    "frontendPort": 80,
-                    "backendPort": 80,
-                    "enableFloatingIP": false,
-                    "idleTimeoutInMinutes": 5,
-                    "probe": {
-                      "id": "[variables('lbProbeID')]"
+                ],
+                "backendAddressPools": [
+                    {
+                        "name": "BackendPool1"
                     }
-                  }
+                ],
+                "inboundNatRules": [
+                    {
+                        "name": "RDP-VM0",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID')]"
+                            },
+                            "protocol": "tcp",
+                            "frontendPort": 50001,
+                            "backendPort": 3389,
+                            "enableFloatingIP": false
+                        }
+                    },
+                    {
+                        "name": "RDP-VM1",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID')]"
+                            },
+                            "protocol": "tcp",
+                            "frontendPort": 50002,
+                            "backendPort": 3389,
+                            "enableFloatingIP": false
+                        }
+                    }
+                ],
+                "loadBalancingRules": [
+                    {
+                        "name": "LBRule",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('frontEndIPConfigID')]"
+                            },
+                        "backendAddressPool": {
+                            "id": "[variables('lbPoolID')]"
+                        },
+                        "protocol": "tcp",
+                        "frontendPort": 80,
+                        "backendPort": 80,
+                        "enableFloatingIP": false,
+                        "idleTimeoutInMinutes": 5,
+                        "probe": {
+                            "id": "[variables('lbProbeID')]"
+                        }
+                    }
+                    }
+                ],
+                "probes": [
+                    {
+                        "name": "tcpProbe",
+                        "properties": {
+                                "protocol": "tcp",
+                                "port": 80,
+                                "intervalInSeconds": 5,
+                                "numberOfProbes": 2
+                            }
+                        }
+                    ]
                 }
-              ],
-              "probes": [
-                {
-                  "name": "tcpProbe",
-                  "properties": {
-                    "protocol": "tcp",
-                    "port": 80,
-                    "intervalInSeconds": 5,
-                    "numberOfProbes": 2
-                  }
-                }
-              ]
-            }
-          },
-          {
-            "apiVersion": "2017-03-30",
-            "type": "Microsoft.Compute/virtualMachines",
-            "name": "[concat(parameters('appVMPrefix'), copyindex())]",
-            "copy": {
-              "name": "virtualMachineLoop",
-              "count": "[variables('appVMInstances')]"
             },
-            "location": "[parameters('location')]",
-            "dependsOn": [
-              "[resourceId('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
-              "[concat('Microsoft.Network/networkInterfaces/', parameters('appNicPrefix'), copyindex())]",
-              "[concat('Microsoft.Compute/availabilitySets/', variables('appAvailabilitySetName'))]"
-            ],
-            "properties": {
-              "availabilitySet": {
-                "id": "[resourceId('Microsoft.Compute/availabilitySets',variables('appAvailabilitySetName'))]"
-              },
-              "hardwareProfile": {
-                "vmSize": "[parameters('vmSize')]"
-              },
-              "osProfile": {
-                "computerName": "[concat(parameters('appVmPrefix'), copyIndex())]",
-                "adminUsername": "[parameters('adminUsername')]",
-                "adminPassword": "[parameters('adminPassword')]"
-              },
-              "storageProfile": {
-                "imageReference": {
-                  "publisher": "[variables('imagePublisher')]",
-                  "offer": "[variables('imageOffer')]",
-                  "sku": "[parameters('windowsOSVersion')]",
-                  "version": "latest"
+            {
+                "apiVersion": "2017-03-30",
+                "type": "Microsoft.Compute/virtualMachines",
+                "name": "[concat(parameters('appVMPrefix'), copyindex())]",
+                "copy": {
+                    "name": "virtualMachineLoop",
+                    "count": "[variables('appVMInstances')]"
                 },
-                "osDisk": {
-                  "name": "[concat(parameters('appVmPrefix'), copyIndex(),'-osdisk')]",
-                  "createOption": "FromImage"
+                "location": "[parameters('location')]",
+                "dependsOn": [
+                    "[resourceId('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
+                    "[concat('Microsoft.Network/networkInterfaces/', parameters('appNicPrefix'), copyindex())]",
+                    "[concat('Microsoft.Compute/availabilitySets/', variables('appAvailabilitySetName'))]"
+                ],
+                "properties": {
+                    "availabilitySet": {
+                        "id": "[resourceId('Microsoft.Compute/availabilitySets',variables('appAvailabilitySetName'))]"
+                    },
+                "hardwareProfile": {
+                    "vmSize": "[parameters('vmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[concat(parameters('appVmPrefix'), copyIndex())]",
+                    "adminUsername": "[parameters('adminUsername')]",
+                    "adminPassword": "[parameters('adminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('imagePublisher')]",
+                        "offer": "[variables('imageOffer')]",
+                        "sku": "[parameters('windowsOSVersion')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "[concat(parameters('appVmPrefix'), copyIndex(),'-osdisk')]",
+                        "createOption": "FromImage"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces',concat(parameters('appNicPrefix'),copyindex()))]"
+                        }
+                    ]
+                },
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": "true",
+                        "storageUri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2016-01-01').primaryEndpoints.blob)]"
+                    }
                 }
-              },
-              "networkProfile": {
-                "networkInterfaces": [
-                  {
-                    "id": "[resourceId('Microsoft.Network/networkInterfaces',concat(parameters('appNicPrefix'),copyindex()))]"
-                  }
-                ]
-              },
-              "diagnosticsProfile": {
-                "bootDiagnostics": {
-                  "enabled": "true",
-                  "storageUri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2016-01-01').primaryEndpoints.blob)]"
-                }
-              }
             }
-          },
-          {
+        },
+        {
             "type": "Microsoft.Compute/virtualMachines/extensions",
             "name": "[concat(parameters('appVMPrefix'),copyIndex(),'/', variables('vmExtensionName'))]",
             "apiVersion": "2018-06-01",
             "copy": {
-              "name": "virtualMachineIISLoop",
-              "count": "[variables('appVMInstances')]"
+                "name": "virtualMachineIISLoop",
+                "count": "[variables('appVMInstances')]"
             },
             "location": "[parameters('location')]",
             "dependsOn": [
-              "[concat('Microsoft.Compute/virtualMachines/', parameters('appVmPrefix'),copyIndex())]"
+                "[concat('Microsoft.Compute/virtualMachines/', parameters('appVmPrefix'),copyIndex())]"
             ],
             "properties": {
-              "publisher": "Microsoft.Powershell",
-              "type": "DSC",
-              "typeHandlerVersion": "2.19",
-              "autoUpgradeMinorVersion": true,
-              "settings": {
-                "ModulesUrl": "[parameters('modulesUrl')]",
-                "ConfigurationFunction": "[parameters('configurationFunction')]",
-                "Properties": {
-                  "MachineName": "[concat(parameters('appVmPrefix'), copyIndex())]"
-                }
-              },
-              "protectedSettings": null
+                "publisher": "Microsoft.Powershell",
+                "type": "DSC",
+                "typeHandlerVersion": "2.19",
+                "autoUpgradeMinorVersion": true,
+                "settings": {
+                    "ModulesUrl": "[parameters('modulesUrl')]",
+                    "ConfigurationFunction": "[parameters('configurationFunction')]",
+                    "Properties": {
+                        "MachineName": "[concat(parameters('appVmPrefix'), copyIndex())]"
+                    }
+                },
+                "protectedSettings": null
             }
-          }
+        }
     ],
     "outputs": {
         "vnetname": {
@@ -708,6 +709,5 @@
             "value" : "[variables('rdpAsgId')]"
         }
     }
-   
 }
     
