@@ -1,693 +1,779 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
-    "parameters": {
-        "location": {
-            "type": "string",
-            "defaultValue": "[resourceGroup().location]",
-            "metadata": {
-                "description": "Location for all resources."
-            }
-        },
-        "vnetName": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64,
-            "metadata": {
-                "description": "Name for the virtual network"
-            }
-        },
-        "vnetPrefix": {
-            "type": "string",
-            "defaultValue": "10.1.0.0/16",
-            "metadata": {
-                "description": "CIDR address space for the virtual network"
-            }
-        },
-        "adminUsername": {
-            "type": "string",
-            "metadata": {
-                "description": "User name for the Virtual Machine."
-            }
-        },
-        "adminPassword": {
-            "type": "securestring",
-            "metadata": {
-                "description": "Password for the Virtual Machine."
-            }
-        },
-        "dnsLabelPrefix": {
-            "type": "string",
-            "defaultValue": "",
-            "metadata": {
-                "description": "Unique DNS Name for the Public IP used to access the Virtual Machine."
-            }
-        },
-        "windowsOSVersion": {
-            "type": "string",
-            "defaultValue": "2016-Datacenter",
-            "allowedValues": [
-                "2008R2",
-                "2016-Datacenter"
-            ],
-            "metadata": {
-                "description": "The Ubuntu version for the VM. This will pick a fully patched image of this given Ubuntu version."
-            }
-        },
-        "vmName": {
-            "type": "string",
-            "defaultValue": "rdpjumpserver01",
-            "maxLength": 64,
-            "metadata": {
-                "description": "User name for the Virtual Machine."
-            }
-        },
-        "vmSize": {
-            "type": "string",
-            "defaultValue": "Standard_A1",
-            "metadata": {
-                "description": "User name for the Virtual Machine."
-            }
-        },
-        "numberOfDataDisks": {
-            "type": "int",
-            "defaultValue": 1,
-            "maxValue": 2,
-            "metadata": {
-                "description": "Number of data disks to create"
-            }
-        },
-        "subnets": { 
-            "type": "array", 
-            "defaultValue": [ 
-                "gatewaySubnet", 
-                "dmzSubnet",
-                "applicationSubnet",
-                "dataSubnet"
-            ] 
-        },
-        "subnetprefixes": { 
-            "type": "array", 
-            "defaultValue": [ 
-                "10.1.0.0/29", 
-                "10.1.1.0/27", 
-                "10.1.2.0/24",
-                "10.1.3.0/26"
-            ] 
-        },
-        "appLbName": {
-            "type": "string",
-            "defaultValue": "appLB",
-            "metadata": {
-              "description": "Load Balancer name"
-            }
-        },
-        "appDnsNameforLBIP": {
-            "type": "string",
-            "metadata": {
-              "description": "DNS for Load Balancer IP"
-            }
-        },
-        "appVMPrefix": {
-            "type": "string",
-            "defaultValue": "appwebiis",
-            "metadata": {
-              "description": "Prefix to use for VM names"
-            }
-        },
-        "appNicPrefix": {
-            "type": "string",
-            "defaultValue": "AppWebnic",
-            "metadata": {
-              "description": "Network Interface name prefix"
-            }
-        },
-        "appPublicIPName": {
-            "type": "string",
-            "defaultValue": "AppWeb-pip",
-            "metadata": {
-              "description": "Public IP Name"
-            }
-        },
-        "modulesUrl": {
-            "type": "string",
-            "metadata": {
-                "description": "URL for the DSC configuration module. NOTE: Can be a Github url(raw) to the zip file"
-            }
-        },
-        "configurationFunction": {
-            "type": "string",
-            "defaultValue": "ContosoWebsite.ps1\\ContosoWebsite",
-            "metadata": {
-            "description": "DSC configuration function to call"
-        }
-      }
-    },
-    "variables": {
-        "dmzSubnet": "dmzSubnet",
-        "gwSubnet": "gatewaySubnet",
-        "appSubnet": "applicationSubnet",
-        "dataSubnet": "dataSubnet",
-        "rdpAsgName": "rdpServersAsg",
-        "rdpAsgId": "[resourceId('Microsoft.Network/applicationSecurityGroups',variables('rdpAsgName'))]",
-        "rdpNsgName": "rdpWebNsg",
-        "rdpNsgId": "[resourceId('Microsoft.Network/networkSecurityGroups',variables('rdpNsgName'))]",
-        "appAsgName": "appServersAsg",
-        "appAsgId": "[resourceId('Microsoft.Network/applicationSecurityGroups',variables('appAsgName'))]",
-        "appNsgName": "appWebNsg",
-        "appNsgId": "[resourceId('Microsoft.Network/networkSecurityGroups',variables('appNsgName'))]",
-        "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'mandb')]",
-        "storageAccountType": "Standard_LRS",
-        "imagePublisher": "MicrosoftWindowsServer",
-        "imageOffer": "WindowsServer",
-        "pipType": "Dynamic",   
-        "gwSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets',parameters('vnetName'),variables('gwSubnet'))]",
-        "dmzSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets',parameters('vnetName'),variables('dmzSubnet'))]",
-        "appSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets',parameters('vnetName'),variables('appSubnet'))]",
-        "dataSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets',parameters('vnetName'),variables('dataSubnet'))]",
-        "nicName": "[concat(parameters('vmName'), '-nic')]",
-        "pipName": "[concat(parameters('vmName'), '-pip')]",
-        "pipId": "[resourceId('Microsoft.Network/publicIPAddresses',variables('pipName'))]",
-        "pip?": "[not(empty(parameters('dnsLabelPrefix')))]",
-        "appAvailabilitySetName": "myAvSet",
-        "appPublicIPAddressID": "[resourceId('Microsoft.Network/publicIPAddresses',parameters('appPublicIPName'))]",
-        "appVMInstances": 2,
-        "appLbID": "[resourceId('Microsoft.Network/loadBalancers',parameters('appLbName'))]",
-        "frontEndIPConfigID": "[concat(variables('appLbID'),'/frontendIPConfigurations/LoadBalancerFrontEnd')]",
-        "lbPoolID": "[concat(variables('appLbID'),'/backendAddressPools/BackendPool1')]",
-        "lbProbeID": "[concat(variables('appLbID'),'/probes/tcpProbe')]",
-        "vmExtensionName": "dscExtension",
-        "nsgIDs": { 
-          "type": "array", 
-          "value": [ 
-              "[variables('rdpNsgId')]", 
-              "[variables('appNsgId')]",
-              "[variables('rdpNsgId')]", 
-              "[variables('appNsgId')]"
-          ] 
-        }
-    },
-    "resources": [
-        {
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+      "location": {
+          "type": "string",
+          "defaultValue": "[resourceGroup().location]",
+          "metadata": {
+              "description": "Location for all resources."
+          }
+      },
+      "adminUsername": {
+          "type": "string",
+          "metadata": {
+              "description": "User name for the Virtual Machine."
+          }
+      },
+      "adminPassword": {
+          "type": "securestring",
+          "metadata": {
+              "description": "Password for the Virtual Machine."
+          }
+      },
+      "dnsLabelPrefix": {
+          "type": "string",
+          "defaultValue": "",
+          "metadata": {
+              "description": "Unique DNS Name for the Public IP used to access the Virtual Machine."
+          }
+      },
+      "windowsOSVersion": {
+          "type": "string",
+          "defaultValue": "2016-Datacenter",
+          "allowedValues": [
+              "2008R2",
+              "2016-Datacenter"
+          ],
+          "metadata": {
+              "description": "The Ubuntu version for the VM. This will pick a fully patched image of this given Ubuntu version."
+          }
+      },
+      "vmName": {
+          "type": "string",
+          "defaultValue": "rdpjumpserver01",
+          "maxLength": 64,
+          "metadata": {
+              "description": "User name for the Virtual Machine."
+          }
+      },
+      "vmSize": {
+          "type": "string",
+          "defaultValue": "Standard_A1",
+          "metadata": {
+              "description": "User name for the Virtual Machine."
+          }
+      },
+      "numberOfDataDisks": {
+          "type": "int",
+          "defaultValue": 1,
+          "maxValue": 2,
+          "metadata": {
+              "description": "Number of data disks to create"
+          }
+      },
+      "appLbName": {
+          "type": "string",
+          "defaultValue": "appLB",
+          "metadata": {
+            "description": "Load Balancer name"
+          }
+      },
+      "appDnsNameforLBIP": {
+          "type": "string",
+          "metadata": {
+            "description": "DNS for Load Balancer IP"
+          }
+      },
+      "appVMPrefix": {
+          "type": "string",
+          "defaultValue": "appwebiis",
+          "metadata": {
+            "description": "Prefix to use for VM names"
+          }
+      },
+      "appNicPrefix": {
+          "type": "string",
+          "defaultValue": "AppWebnic",
+          "metadata": {
+            "description": "Network Interface name prefix"
+          }
+      },
+      "appPublicIPName": {
+          "type": "string",
+          "defaultValue": "AppWeb-pip",
+          "metadata": {
+            "description": "Public IP Name"
+          }
+      },
+      "modulesUrl": {
+          "type": "string",
+          "metadata": {
+              "description": "URL for the DSC configuration module. NOTE: Can be a Github url(raw) to the zip file"
+          }
+      },
+      "configurationFunction": {
+          "type": "string",
+          "defaultValue": "ContosoWebsite.ps1\\ContosoWebsite",
+          "metadata": {
+              "description": "DSC configuration function to call"
+          }
+      },
+      "VNetSettings":{"type":"object"}
+  },
+  "variables": {
+      "rdpAsgName": "rdpServersAsg",
+      "rdpAsgId": "[resourceId('Microsoft.Network/applicationSecurityGroups',variables('rdpAsgName'))]",
+      "rdpNsgName": "rdpWebNsg",
+      "rdpNsgId": "[resourceId('Microsoft.Network/networkSecurityGroups',variables('rdpNsgName'))]",
+      "appAsgName": "appServersAsg",
+      "appAsgId": "[resourceId('Microsoft.Network/applicationSecurityGroups',variables('appAsgName'))]",
+      "appNsgName": "appWebNsg",
+      "appNsgId": "[resourceId('Microsoft.Network/networkSecurityGroups',variables('appNsgName'))]",
+      "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'mandb')]",
+      "storageAccountType": "Standard_LRS",
+      "storageAccountTier": "Standard",
+      "imagePublisher": "MicrosoftWindowsServer",
+      "imageOffer": "WindowsServer",
+      "pipType": "Dynamic",   
+      "gwSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets',parameters('VNetSettings').name,parameters('VNetSettings').subnets[0].name)]",
+      "dmzSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets',variables('vnetName'),variables('dmzSubnet'))]",
+      "appSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets','infrastructureVNET','appSubnet')]",
+      "dataSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets',parameters('VNetSettings').name,parameters('VNetSettings').subnets[3].name)]",
+      "nicName": "[concat(parameters('vmName'), '-nic')]",
+      "pipName": "[concat(parameters('vmName'), '-pip')]",
+      "pipId": "[resourceId('Microsoft.Network/publicIPAddresses',variables('pipName'))]",
+      "pip?": "[not(empty(parameters('dnsLabelPrefix')))]",
+      "appAvailabilitySetName": "myAvSet",
+      "appPublicIPAddressID": "[resourceId('Microsoft.Network/publicIPAddresses',parameters('appPublicIPName'))]",
+      "appVMInstances": 2,
+      "appLbID": "[resourceId('Microsoft.Network/loadBalancers',parameters('appLbName'))]",
+      "frontEndIPConfigID": "[concat(variables('appLbID'),'/frontendIPConfigurations/LoadBalancerFrontEnd')]",
+      "lbPoolID": "[concat(variables('appLbID'),'/backendAddressPools/BackendPool1')]",
+      "lbProbeID": "[concat(variables('appLbID'),'/probes/tcpProbe')]",
+      "vmExtensionName": "dscExtension",
+      "vnetName": "[parameters('VNetSettings').name]",
+      "dmzSubnet": "[parameters('VNetSettings').subnets[1].name]",
+      "appSubnet": "[parameters('VNetSettings').subnets[2].name]",
+      "sqlserverName": "[concat('sqlserver', uniqueString(resourceGroup().id))]",
+      "databaseName": "mitchellsandbutlersdb",
+      "containerName" : "logs"
+      
+  },
+  "resources": [
+      {
           "name": "[variables('rdpAsgName')]",
           "type": "Microsoft.Network/applicationSecurityGroups",
           "apiVersion": "2018-08-01",
           "location": "[parameters('location')]",
-
           "properties": {}
-        },
-        {
+      },
+      {
           "comments": "Network Security Group",
           "name": "[variables('rdpNsgName')]",
           "type": "Microsoft.Network/networkSecurityGroups",
           "apiVersion": "2018-08-01",
           "location": "[parameters('location')]",
           "dependsOn": [
-            "[variables('rdpAsgName')]",
-            "[resourceId('Microsoft.Network/applicationSecurityGroups/', variables('rdpAsgName'))]"
+              "[variables('rdpAsgName')]",
+              "[resourceId('Microsoft.Network/applicationSecurityGroups/', variables('rdpAsgName'))]"
           ],
           "properties": {
-            "securityRules": [
-              {
-                "name": "AllowHttpAll",
-                "properties": {
-                  "description": "Allow http traffic to web servers",
-                  "sourceAddressPrefix": "*",
-                  "sourcePortRange": "*",
-                  "direction": "Inbound",
-                  "access": "Allow",
-                  "priority": 100,
-                  "protocol": "Tcp",
-                  "destinationPortRange": "80",
-                  "destinationApplicationSecurityGroups": [
-                    {
-                      "id": "[variables('rdpAsgId')]"
-                    }
-                  ]
-                }
-              },
-              {
-                "name": "AllowRDPForIan",
-                "properties": {
-                  "description": "Allow RDP traffic to web servers",
-                  "sourceAddressPrefix": "5.69.243.59",
-                  "sourcePortRange": "*",
-                  "direction": "Inbound",
-                  "access": "Allow",
-                  "priority": 200,
-                  "protocol": "Tcp",
-                  "destinationPortRange": "3389",
-                  "destinationApplicationSecurityGroups": [
-                    {
-                      "id": "[variables('rdpAsgId')]"
-                    }
-                  ]
-                }
-              }
-            ]
+              "securityRules": [
+                  {
+                      "name": "AllowHttpAll",
+                      "properties": {
+                          "description": "Allow http traffic to web servers",
+                          "sourceAddressPrefix": "*",
+                          "sourcePortRange": "*",
+                          "direction": "Inbound",
+                          "access": "Allow",
+                          "priority": 100,
+                          "protocol": "Tcp",
+                          "destinationPortRange": "80",
+                          "destinationApplicationSecurityGroups": [
+                              {
+                                  "id": "[variables('rdpAsgId')]"
+                              }
+                          ]   
+                      }
+                  },
+                  {
+                      "name": "AllowRDPForIan",
+                      "properties": {
+                          "description": "Allow RDP traffic to web servers",
+                          "sourceAddressPrefix": "5.69.243.59",
+                          "sourcePortRange": "*",
+                          "direction": "Inbound",
+                          "access": "Allow",
+                          "priority": 200,
+                          "protocol": "Tcp",
+                          "destinationPortRange": "3389",
+                          "destinationApplicationSecurityGroups": [
+                              {
+                                  "id": "[variables('rdpAsgId')]"
+                              }
+                          ]   
+                      }
+                  },
+                  { 
+                      "name": "AllowRDPForGuest",
+                      "properties": {
+                          "description": "Allow RDP traffic to web servers",
+                          "sourceAddressPrefix": "62.60.8.150",
+                          "sourcePortRange": "*",
+                          "direction": "Inbound",
+                          "access": "Allow",
+                          "priority": 201,
+                          "protocol": "Tcp",
+                          "destinationPortRange": "3389",
+                          "destinationApplicationSecurityGroups": [
+                              {
+                                  "id": "[variables('rdpAsgId')]"
+                              }
+                          ]
+                      }
+                  }
+              ]
           }
-        },
-        {
+      },
+      {
           "name": "[variables('appAsgName')]",
           "type": "Microsoft.Network/applicationSecurityGroups",
           "apiVersion": "2018-08-01",
           "location": "[parameters('location')]",
           "properties": {}
-        },
-        {
+      },
+      {
           "comments": "Network Security Group",
           "name": "[variables('appNsgName')]",
           "type": "Microsoft.Network/networkSecurityGroups",
           "apiVersion": "2018-08-01",
           "location": "[parameters('location')]",
           "dependsOn": [
-            "[variables('appAsgName')]",
-            "[resourceId('Microsoft.Network/applicationSecurityGroups/', variables('appAsgName'))]"
+              "[variables('appAsgName')]",
+              "[resourceId('Microsoft.Network/applicationSecurityGroups/', variables('appAsgName'))]"
           ],
           "properties": {
-            "securityRules": [
-              {
-                "name": "AllowHttpAll",
-                "properties": {
-                  "description": "Allow http traffic to web servers",
-                  "sourceAddressPrefix": "*",
-                  "sourcePortRange": "*",
-                  "direction": "Inbound",
-                  "access": "Allow",
-                  "priority": 100,
-                  "protocol": "Tcp",
-                  "destinationPortRange": "80",
-                  "destinationApplicationSecurityGroups": [
-                    {
-                      "id": "[variables('appAsgId')]"
-                    }
-                  ]
-                }
-              },
-              {
-                "name": "AllowRDPForIan",
-                "properties": {
-                  "description": "Allow RDP traffic to web servers",
-                  "sourceAddressPrefix": "5.69.243.59",
-                  "sourcePortRange": "*",
-                  "direction": "Inbound",
-                  "access": "Allow",
-                  "priority": 200,
-                  "protocol": "Tcp",
-                  "destinationPortRange": "3389",
-                  "destinationApplicationSecurityGroups": [
-                    {
-                      "id": "[variables('appAsgId')]"
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-      
-        {
-            "type": "Microsoft.Storage/storageAccounts",
-            "name": "[variables('storageAccountName')]",
-            "apiVersion": "2017-06-01",
-            "location": "[parameters('location')]",
-            "sku": {
-                "name": "[variables('storageAccountType')]"
-            },
-            "kind": "Storage",
-            "properties": {}
-        },
-        {
-            "condition": "[variables('pip?')]",
-            "apiVersion": "2017-06-01",
-            "type": "Microsoft.Network/publicIPAddresses",
-            "name": "[variables('pipName')]",
-            "location": "[parameters('location')]",
-            "properties": {
-                "publicIPAllocationMethod": "[variables('pipType')]",
-                "dnsSettings": {
-                    "domainNameLabel": "[parameters('dnsLabelPrefix')]"
-                }
-            }
-        },
-        {
-            "apiVersion": "2017-09-01",
-            "type": "Microsoft.Network/networkInterfaces",
-            "name": "[variables('nicName')]",
-            "location": "[parameters('location')]",
-            "dependsOn": [
-                "[variables('pipName')]",
-                "[parameters('vnetName')]",
-                "[variables('dmzSubnetId')]"
-            ],
-            "properties": {
-                "ipConfigurations": [
-                    {
-                        "name": "ipconfigdmz",
-                        "properties": {
-                          "privateIPAllocationMethod": "Dynamic",
-                          "publicIPAddress": {
-                            "id": "[variables('pipId')]"
-                          },
-                          "subnet": {
-                            "id": "[variables('dmzSubnetId')]"
-                          },
-                          "applicationSecurityGroups": [
-                            {
-                              "id": "[variables('rdpAsgId')]"
-                            }
+              "securityRules": [
+                  {
+                      "name": "AllowHttpAll",
+                      "properties": {
+                          "description": "Allow http traffic to web servers",
+                          "sourceAddressPrefix": "*",
+                          "sourcePortRange": "*",
+                          "direction": "Inbound",
+                          "access": "Allow",
+                          "priority": 100,
+                          "protocol": "Tcp",
+                          "destinationPortRange": "80",
+                          "destinationApplicationSecurityGroups": [
+                              {
+                                  "id": "[variables('appAsgId')]"
+                              }
                           ]
-                        }
                       }
-                ]
-            }
-        },
-        {
-            "apiVersion": "2017-03-30",
-            "type": "Microsoft.Compute/virtualMachines",
-            "name": "[parameters('vmName')]",
-            "location": "[parameters('location')]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
-                "[resourceId('Microsoft.Network/networkInterfaces/', variables('nicName'))]"
-            ],
-            "properties": {
-                "hardwareProfile": {
-                    "vmSize": "[parameters('vmSize')]"
-                },
-                "osProfile": {
-                    "computerName": "[parameters('vmName')]",
-                    "adminUsername": "[parameters('adminUsername')]",
-                    "adminPassword": "[parameters('adminPassword')]"
-                },
-                "storageProfile": {
-                    "imageReference": {
-                        "publisher": "[variables('imagePublisher')]",
-                        "offer": "[variables('imageOffer')]",
-                        "sku": "[parameters('windowsOSVersion')]",
-                        "version": "latest"
-                    },
-                    "osDisk": {
-                        "name": "[concat(parameters('vmName'),'-osdisk')]",
-                        "createOption": "FromImage"
-                    },
-                    "copy": [{
-                        "name": "dataDisks",
-                        "count": "[parameters('numberofDataDisks')]",
-                        "input": {
-                            "name": "[concat(parameters('vmName'),'-dataDisk', padleft(copyIndex('dataDisks'),2,'0'))]",
-                            "diskSizeGB": 1023,
-                            "lun": "[copyIndex('dataDisks')]",
-                            "createOption": "Empty"
-                        }
-                    }]
-                },
-                "networkProfile": {
-                    "networkInterfaces": [
-                        {
-                            "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('nicName'))]"
-                        }
-                    ]
-                },
-                "diagnosticsProfile": {
-                    "bootDiagnostics": {
-                        "enabled": true,
-                        "storageUri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2016-01-01').primaryEndpoints.blob)]"
-                    }
-                }
-            }
-        },
-        {
-            "apiVersion": "2018-08-01",
-            "type": "Microsoft.Network/virtualNetworks",
-            "name": "[parameters('vnetName')]",
-            "dependsOn" : [
-            ],
-            "location": "[parameters('location')]",
-            "properties": {
-              "addressSpace": {
-                "addressPrefixes": [
-                  "[parameters('vnetPrefix')]"
-                ]
+                  },
+                  {
+                      "name": "AllowRDPForIan",
+                      "properties": {
+                          "description": "Allow RDP traffic to web servers",
+                          "sourceAddressPrefix": "5.69.243.59",
+                          "sourcePortRange": "*",
+                          "direction": "Inbound",
+                          "access": "Allow",
+                          "priority": 200,
+                          "protocol": "Tcp",
+                          "destinationPortRange": "3389",
+                          "destinationApplicationSecurityGroups": [
+                              {
+                                  "id": "[variables('appAsgId')]"
+                              }
+                          ]
+                      }
+                  },
+                  {
+                      "name": "AllowRDPForGuest",
+                      "properties": {
+                          "description": "Allow RDP traffic to web servers",
+                          "sourceAddressPrefix": "62.60.8.150",
+                          "sourcePortRange": "*",
+                          "direction": "Inbound",
+                          "access": "Allow",
+                          "priority": 201,
+                          "protocol": "Tcp",
+                          "destinationPortRange": "3389",
+                          "destinationApplicationSecurityGroups": [
+                              {
+                                  "id": "[variables('appAsgId')]"
+                              }
+                          ]
+                      }
+                  }
+              ]
+          }
+      },
+      {
+          "type": "Microsoft.Storage/storageAccounts",
+          "name": "[variables('storageAccountName')]",
+          "apiVersion": "2018-02-01",
+          "location": "[parameters('location')]",
+          "kind": "StorageV2",
+          "sku": {
+              "name": "[variables('storageAccountType')]"
+          },
+          "properties": {
+              "accessTier": "Cool"
+          },
+          "resources": [
+              {
+                  "name": "[concat('default/', variables('containerName'))]",
+                  "type": "blobServices/containers",
+                  "apiVersion": "2018-03-01-preview",
+                  "dependsOn": [
+                      "[variables('storageAccountName')]"
+                  ],
+                  "properties": {
+                      "publicAccess": "None"
+                  } 
               }
-            }
-          },
-          {
-            "apiVersion": "2018-08-01",
-            "type": "Microsoft.Network/virtualNetworks/subnets",
-            "dependsOn": [
-              "[parameters('vnetName')]",
-              "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]",
-              "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('rdpNsgName'))]",
-              "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('appNsgName'))]"
-            ],
-            "location": "[parameters('location')]", 
-            "name": "[concat(parameters('vnetName'),'/',parameters('subnets')[copyIndex()])]",
-            "copy": {
-              "name": "test",
-              "count": "[length(parameters('subnets'))]",
-              "mode": "serial",
-                  "batchSize": 1
-              },
-              "properties": {
-                "addressPrefix": "[parameters('subnetprefixes')[copyIndex()]]",
-                "networkSecurityGroup": {
-                  "id": "[variables('nsgIDs')[copyIndex()]]"
-                }
-              
-              }   
-        },
-        {
-            "type": "Microsoft.Compute/availabilitySets",
-            "name": "[variables('appAvailabilitySetName')]",
-            "apiVersion": "2018-06-01",
-            "location": "[parameters('location')]",
-            "properties": {
-              "platformFaultDomainCount": 2,
-              "platformUpdateDomainCount": 2
-            },
-            "sku": {
-                "name": "Aligned"}
-          },
-          {
-            "apiVersion": "2018-06-01",
-            "type": "Microsoft.Network/publicIPAddresses",
-            "name": "[parameters('appPublicIPName')]",
-            "location": "[parameters('location')]",
-            "properties": {
+          ]    
+      },
+      {
+          "condition": "[variables('pip?')]",
+          "apiVersion": "2017-06-01",
+          "type": "Microsoft.Network/publicIPAddresses",
+          "name": "[variables('pipName')]",
+          "location": "[parameters('location')]",
+          "properties": {
               "publicIPAllocationMethod": "[variables('pipType')]",
               "dnsSettings": {
-                "domainNameLabel": "[parameters('appDnsNameforLBIP')]"
+                  "domainNameLabel": "[parameters('dnsLabelPrefix')]"
               }
-            }
-          },
-          {
-            "apiVersion": "2017-09-01",
-            "type": "Microsoft.Network/networkInterfaces",
-            "name": "[concat(parameters('appNicPrefix'), copyindex())]",
-            "location": "[parameters('location')]",
-            "copy": {
-              "name": "nicLoop",
-              "count": "[variables('appVMInstances')]"
-            },
-            "dependsOn": [
-              "[variables('appSubnetId')]",
-              "[concat('Microsoft.Network/loadBalancers/', parameters('appLbName'))]"
-            ],
-            "properties": {
+          }
+      },
+      {
+          "apiVersion": "2017-09-01",
+          "type": "Microsoft.Network/networkInterfaces",
+          "name": "[variables('nicName')]",
+          "location": "[parameters('location')]",
+          "dependsOn": [
+              "[variables('pipName')]",
+              "[resourceId('Microsoft.Network/virtualNetworks/',variables('vnetName'))]",
+              "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('rdpNsgName'))]",
+              "[resourceId('2a9ef736-6145-4d3a-ad1b-a1da20b06311','MitchellsAndButlersRG','Microsoft.Network/virtualNetworks',variables('vnetName'))]"
+          ],
+          "properties": {
               "ipConfigurations": [
-                {
-                  "name": "ipconfigApp",
-                  "properties": {
-                    "privateIPAllocationMethod": "Dynamic",
-                    "subnet": {
-                      "id": "[variables('appSubnetId')]"
-                    },
-                    "applicationSecurityGroups": [
-                        {
-                          "id": "[variables('appAsgId')]"
-                        }
-                    ],
-                    "loadBalancerBackendAddressPools": [
-                      {
-                        "id": "[concat(variables('appLbID'), '/backendAddressPools/BackendPool1')]"
+                  {
+                      "name": "ipconfigdmz",
+                      "properties": {
+                          "privateIPAllocationMethod": "Dynamic",
+                          "publicIPAddress": {
+                              "id": "[variables('pipId')]"
+                          },
+                          "subnet": {
+                              "id": "[variables('dmzSubnetId')]"
+                          },
+                          "applicationSecurityGroups": [
+                              {
+                                  "id": "[variables('rdpAsgId')]"
+                              }
+                          ]
                       }
-                    ],
-                    "loadBalancerInboundNatRules": [
-                      {
-                        "id": "[concat(variables('appLbID'),'/inboundNatRules/RDP-VM', copyindex())]"
-                      }
-                    ]
                   }
-                }
               ]
-            }
-          },
-          {
-            "apiVersion": "2018-08-01",
-            "name": "[parameters('appLbName')]",
-            "type": "Microsoft.Network/loadBalancers",
-            "location": "[parameters('location')]",
-            "dependsOn": [
-              "[concat('Microsoft.Network/publicIPAddresses/', parameters('appPublicIPName'))]"
-            ],
-            "properties": {
-              "frontendIPConfigurations": [
-                {
-                  "name": "LoadBalancerFrontEnd",
-                  "properties": {
-                    "publicIPAddress": {
-                      "id": "[variables('appPublicIPAddressID')]"
-                    }
-                  }
-                }
-              ],
-              "backendAddressPools": [
-                {
-                  "name": "BackendPool1"
-                }
-              ],
-              "inboundNatRules": [
-                {
-                  "name": "RDP-VM0",
-                  "properties": {
-                    "frontendIPConfiguration": {
-                      "id": "[variables('frontEndIPConfigID')]"
-                    },
-                    "protocol": "tcp",
-                    "frontendPort": 50001,
-                    "backendPort": 3389,
-                    "enableFloatingIP": false
-                  }
-                },
-                {
-                  "name": "RDP-VM1",
-                  "properties": {
-                    "frontendIPConfiguration": {
-                      "id": "[variables('frontEndIPConfigID')]"
-                    },
-                    "protocol": "tcp",
-                    "frontendPort": 50002,
-                    "backendPort": 3389,
-                    "enableFloatingIP": false
-                  }
-                }
-              ],
-              "loadBalancingRules": [
-                {
-                  "name": "LBRule",
-                  "properties": {
-                    "frontendIPConfiguration": {
-                      "id": "[variables('frontEndIPConfigID')]"
-                    },
-                    "backendAddressPool": {
-                      "id": "[variables('lbPoolID')]"
-                    },
-                    "protocol": "tcp",
-                    "frontendPort": 80,
-                    "backendPort": 80,
-                    "enableFloatingIP": false,
-                    "idleTimeoutInMinutes": 5,
-                    "probe": {
-                      "id": "[variables('lbProbeID')]"
-                    }
-                  }
-                }
-              ],
-              "probes": [
-                {
-                  "name": "tcpProbe",
-                  "properties": {
-                    "protocol": "tcp",
-                    "port": 80,
-                    "intervalInSeconds": 5,
-                    "numberOfProbes": 2
-                  }
-                }
-              ]
-            }
-          },
-          {
-            "apiVersion": "2017-03-30",
-            "type": "Microsoft.Compute/virtualMachines",
-            "name": "[concat(parameters('appVMPrefix'), copyindex())]",
-            "copy": {
-              "name": "virtualMachineLoop",
-              "count": "[variables('appVMInstances')]"
-            },
-            "location": "[parameters('location')]",
-            "dependsOn": [
+          }
+      },
+      {
+          "apiVersion": "2017-03-30",
+          "type": "Microsoft.Compute/virtualMachines",
+          "name": "[parameters('vmName')]",
+          "location": "[parameters('location')]",
+          "dependsOn": [
               "[resourceId('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
-              "[concat('Microsoft.Network/networkInterfaces/', parameters('appNicPrefix'), copyindex())]",
-              "[concat('Microsoft.Compute/availabilitySets/', variables('appAvailabilitySetName'))]"
-            ],
-            "properties": {
-              "availabilitySet": {
-                "id": "[resourceId('Microsoft.Compute/availabilitySets',variables('appAvailabilitySetName'))]"
-              },
+              "[resourceId('Microsoft.Network/networkInterfaces/', variables('nicName'))]"
+          ],
+          "properties": {
               "hardwareProfile": {
-                "vmSize": "[parameters('vmSize')]"
+                  "vmSize": "[parameters('vmSize')]"
               },
               "osProfile": {
-                "computerName": "[concat(parameters('appVmPrefix'), copyIndex())]",
-                "adminUsername": "[parameters('adminUsername')]",
-                "adminPassword": "[parameters('adminPassword')]"
+                  "computerName": "[parameters('vmName')]",
+                  "adminUsername": "[parameters('adminUsername')]",
+                  "adminPassword": "[parameters('adminPassword')]"
               },
               "storageProfile": {
-                "imageReference": {
-                  "publisher": "[variables('imagePublisher')]",
-                  "offer": "[variables('imageOffer')]",
-                  "sku": "[parameters('windowsOSVersion')]",
-                  "version": "latest"
-                },
-                "osDisk": {
-                  "name": "[concat(parameters('appVmPrefix'), copyIndex(),'-osdisk')]",
-                  "createOption": "FromImage"
-                }
+                  "imageReference": {
+                      "publisher": "[variables('imagePublisher')]",
+                      "offer": "[variables('imageOffer')]",
+                      "sku": "[parameters('windowsOSVersion')]",
+                      "version": "latest"
+                  },
+                  "osDisk": {
+                      "name": "[concat(parameters('vmName'),'-osdisk')]",
+                      "createOption": "FromImage"
+                  },
+                  "copy": [
+                      {
+                          "name": "dataDisks",
+                          "count": "[parameters('numberofDataDisks')]",
+                          "input": {
+                              "name": "[concat(parameters('vmName'),'-dataDisk', padleft(copyIndex('dataDisks'),2,'0'))]",
+                              "diskSizeGB": 1023,
+                              "lun": "[copyIndex('dataDisks')]",
+                              "createOption": "Empty"
+                          }
+                      }    
+                  ]
               },
               "networkProfile": {
-                "networkInterfaces": [
-                  {
-                    "id": "[resourceId('Microsoft.Network/networkInterfaces',concat(parameters('appNicPrefix'),copyindex()))]"
-                  }
-                ]
+                  "networkInterfaces": [
+                      {
+                          "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('nicName'))]"
+                      }
+                  ]
               },
               "diagnosticsProfile": {
-                "bootDiagnostics": {
-                  "enabled": "true",
-                  "storageUri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2016-01-01').primaryEndpoints.blob)]"
-                }
+                  "bootDiagnostics": {
+                      "enabled": true,
+                      "storageUri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2016-01-01').primaryEndpoints.blob)]"
+                  }
               }
-            }
+          }
+      },
+      {
+          "apiVersion": "2018-08-01",
+          "type": "Microsoft.Network/virtualNetworks",
+          "name": "[parameters('VNetSettings').name]",
+          "dependsOn": [
+              "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('rdpNsgName'))]",
+              "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('appNsgName'))]"
+          ],
+          "location": "[parameters('location')]",
+          "properties": {
+              "addressSpace": {
+                  "addressPrefixes": [
+                      "[parameters('VNetSettings').addressPrefixes[0].addressPrefix]"
+                  ]
+              },
+              "subnets":[
+                  {
+                      "name":"[parameters('VNetSettings').subnets[0].name]",
+                      "properties": {
+                          "addressPrefix": "[parameters('VNetSettings').subnets[0].addressPrefix]"
+                      }
+                  },
+                  {
+                      "name":"[parameters('VNetSettings').subnets[1].name]",
+                      "properties": {
+                          "addressPrefix": "[parameters('VNetSettings').subnets[1].addressPrefix]",
+                          "networkSecurityGroup": {
+                              "id": "[variables('rdpNsgId')]"
+                          }
+                      }
+                  },
+                  {
+                      "name":"[parameters('VNetSettings').subnets[2].name]",
+                      "properties": {
+                          "addressPrefix": "[parameters('VNetSettings').subnets[2].addressPrefix]",
+                          "networkSecurityGroup": {
+                              "id": "[variables('appNsgId')]"
+                          }
+                      }
+                  },
+                  {
+                      "name":"[parameters('VNetSettings').subnets[3].name]",
+                      "properties": {
+                          "addressPrefix": "[parameters('VNetSettings').subnets[3].addressPrefix]"
+                      }
+                  }
+              ]
+          }
+      },
+      {
+          "type": "Microsoft.Compute/availabilitySets",
+          "name": "[variables('appAvailabilitySetName')]",
+          "apiVersion": "2018-06-01",
+          "location": "[parameters('location')]",
+          "properties": {
+              "platformFaultDomainCount": 2,
+              "platformUpdateDomainCount": 2
+          },
+          "sku": {
+              "name": "Aligned"
+          }
+      },
+      {
+          "apiVersion": "2018-06-01",
+          "type": "Microsoft.Network/publicIPAddresses",
+          "name": "[parameters('appPublicIPName')]",
+          "location": "[parameters('location')]",
+          "properties": {
+              "publicIPAllocationMethod": "[variables('pipType')]",
+              "dnsSettings": {
+                  "domainNameLabel": "[parameters('appDnsNameforLBIP')]"
+              }
+          }
+      },
+      {
+          "apiVersion": "2017-09-01",
+          "type": "Microsoft.Network/networkInterfaces",
+          "name": "[concat(parameters('appNicPrefix'), copyindex())]",
+          "location": "[parameters('location')]",
+          "copy": {
+              "name": "nicLoop",
+              "count": "[variables('appVMInstances')]"
+          },
+          "dependsOn": [
+              "[concat('Microsoft.Network/loadBalancers/', parameters('appLbName'))]",
+              "[resourceId('Microsoft.Network/virtualNetworks/',variables('vnetName'))]",
+              "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('appNsgName'))]"
+          ],
+          "properties": {
+              "ipConfigurations": [
+                  {
+                      "name": "ipconfigApp",
+                      "properties": {
+                          "privateIPAllocationMethod": "Dynamic",
+                          "subnet": {
+                              "id": "[variables('appSubnetId')]"
+                          },
+                          "applicationSecurityGroups": [
+                              {
+                                  "id": "[variables('appAsgId')]"
+                              }
+                          ],
+                          "loadBalancerBackendAddressPools": [
+                              {
+                                  "id": "[concat(variables('appLbID'), '/backendAddressPools/BackendPool1')]"
+                              }
+                          ],
+                          "loadBalancerInboundNatRules": [
+                              {
+                                  "id": "[concat(variables('appLbID'),'/inboundNatRules/RDP-VM', copyindex())]"
+                              }
+                          ]
+                      }
+                  }
+              ]
+          }
+      },
+      {
+          "apiVersion": "2018-08-01",
+          "name": "[parameters('appLbName')]",
+          "type": "Microsoft.Network/loadBalancers",
+          "location": "[parameters('location')]",
+          "dependsOn": [
+              "[concat('Microsoft.Network/publicIPAddresses/', parameters('appPublicIPName'))]"
+          ],
+          "properties": {
+              "frontendIPConfigurations": [
+                  {
+                      "name": "LoadBalancerFrontEnd",
+                      "properties": {
+                          "publicIPAddress": {
+                              "id": "[variables('appPublicIPAddressID')]"
+                          }
+                      }
+                  }
+              ],
+              "backendAddressPools": [
+                  {
+                      "name": "BackendPool1"
+                  }
+              ],
+              "inboundNatRules": [
+                  {
+                      "name": "RDP-VM0",
+                      "properties": {
+                          "frontendIPConfiguration": {
+                              "id": "[variables('frontEndIPConfigID')]"
+                          },
+                          "protocol": "tcp",
+                          "frontendPort": 50001,
+                          "backendPort": 3389,
+                          "enableFloatingIP": false
+                      }
+                  },
+                  {
+                      "name": "RDP-VM1",
+                      "properties": {
+                          "frontendIPConfiguration": {
+                              "id": "[variables('frontEndIPConfigID')]"
+                          },
+                          "protocol": "tcp",
+                          "frontendPort": 50002,
+                          "backendPort": 3389,
+                          "enableFloatingIP": false
+                      }
+                  }
+              ],
+              "loadBalancingRules": [
+                  {
+                      "name": "LBRule",
+                      "properties": {
+                          "frontendIPConfiguration": {
+                              "id": "[variables('frontEndIPConfigID')]"
+                          },
+                      "backendAddressPool": {
+                          "id": "[variables('lbPoolID')]"
+                      },
+                      "protocol": "tcp",
+                      "frontendPort": 80,
+                      "backendPort": 80,
+                      "enableFloatingIP": false,
+                      "idleTimeoutInMinutes": 5,
+                      "probe": {
+                          "id": "[variables('lbProbeID')]"
+                      }
+                  }
+                  }
+              ],
+              "probes": [
+                  {
+                      "name": "tcpProbe",
+                      "properties": {
+                              "protocol": "tcp",
+                              "port": 80,
+                              "intervalInSeconds": 5,
+                              "numberOfProbes": 2
+                          }
+                      }
+                  ]
+              }
           },
           {
-            "type": "Microsoft.Compute/virtualMachines/extensions",
-            "name": "[concat(parameters('appVMPrefix'),copyIndex(),'/', variables('vmExtensionName'))]",
-            "apiVersion": "2018-06-01",
-            "copy": {
+              "apiVersion": "2017-03-30",
+              "type": "Microsoft.Compute/virtualMachines",
+              "name": "[concat(parameters('appVMPrefix'), copyindex())]",
+              "copy": {
+                  "name": "virtualMachineLoop",
+                  "count": "[variables('appVMInstances')]"
+              },
+              "location": "[parameters('location')]",
+              "dependsOn": [
+                  "[resourceId('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
+                  "[concat('Microsoft.Network/networkInterfaces/', parameters('appNicPrefix'), copyindex())]",
+                  "[concat('Microsoft.Compute/availabilitySets/', variables('appAvailabilitySetName'))]"
+              ],
+              "properties": {
+                  "availabilitySet": {
+                      "id": "[resourceId('Microsoft.Compute/availabilitySets',variables('appAvailabilitySetName'))]"
+                  },
+              "hardwareProfile": {
+                  "vmSize": "[parameters('vmSize')]"
+              },
+              "osProfile": {
+                  "computerName": "[concat(parameters('appVmPrefix'), copyIndex())]",
+                  "adminUsername": "[parameters('adminUsername')]",
+                  "adminPassword": "[parameters('adminPassword')]"
+              },
+              "storageProfile": {
+                  "imageReference": {
+                      "publisher": "[variables('imagePublisher')]",
+                      "offer": "[variables('imageOffer')]",
+                      "sku": "[parameters('windowsOSVersion')]",
+                      "version": "latest"
+                  },
+                  "osDisk": {
+                      "name": "[concat(parameters('appVmPrefix'), copyIndex(),'-osdisk')]",
+                      "createOption": "FromImage"
+                  }
+              },
+              "networkProfile": {
+                  "networkInterfaces": [
+                      {
+                          "id": "[resourceId('Microsoft.Network/networkInterfaces',concat(parameters('appNicPrefix'),copyindex()))]"
+                      }
+                  ]
+              },
+              "diagnosticsProfile": {
+                  "bootDiagnostics": {
+                      "enabled": "true",
+                      "storageUri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2016-01-01').primaryEndpoints.blob)]"
+                  }
+              }
+          }
+      },
+      {
+          "type": "Microsoft.Compute/virtualMachines/extensions",
+          "name": "[concat(parameters('appVMPrefix'),copyIndex(),'/', variables('vmExtensionName'))]",
+          "apiVersion": "2018-06-01",
+          "copy": {
               "name": "virtualMachineIISLoop",
               "count": "[variables('appVMInstances')]"
-            },
-            "location": "[parameters('location')]",
-            "dependsOn": [
+          },
+          "location": "[parameters('location')]",
+          "dependsOn": [
               "[concat('Microsoft.Compute/virtualMachines/', parameters('appVmPrefix'),copyIndex())]"
-            ],
-            "properties": {
+          ],
+          "properties": {
               "publisher": "Microsoft.Powershell",
               "type": "DSC",
               "typeHandlerVersion": "2.19",
               "autoUpgradeMinorVersion": true,
               "settings": {
-                "ModulesUrl": "[parameters('modulesUrl')]",
-                "ConfigurationFunction": "[parameters('configurationFunction')]",
-                "Properties": {
-                  "MachineName": "[concat(parameters('appVmPrefix'), copyIndex())]"
-                }
+                  "ModulesUrl": "[parameters('modulesUrl')]",
+                  "ConfigurationFunction": "[parameters('configurationFunction')]",
+                  "Properties": {
+                      "MachineName": "[concat(parameters('appVmPrefix'), copyIndex())]"
+                  }
               },
               "protectedSettings": null
-            }
           }
-    ]
-   
+      },
+      {
+          "name": "[variables('sqlserverName')]",
+          "type": "Microsoft.Sql/servers",
+          "location": "[parameters('location')]",
+          "tags": {
+              "displayName": "SqlServer"
+          },
+          "apiVersion": "2014-04-01",
+          "properties": {
+              "administratorLogin": "[parameters('adminUsername')]",
+              "administratorLoginPassword": "[parameters('adminPassword')]",
+              "version": "12.0"
+          },
+          "resources": [
+              {
+                  "name": "[variables('databaseName')]",
+                  "type": "databases",
+                  "location": "[parameters('location')]",
+                  "tags": {
+                      "displayName": "Database"
+                  },
+                  "apiVersion": "2015-01-01",
+                  "dependsOn": [
+                      "[variables('sqlserverName')]"
+                  ],
+                  "properties": {
+                      "edition": "Basic",
+                      "collation": "SQL_Latin1_General_CP1_CI_AS",
+                      "maxSizeBytes": "1073741824",
+                      "requestedServiceObjectiveName": "Basic"
+                  }
+              },
+              {
+                  "type": "firewallrules",
+                  "apiVersion": "2014-04-01",
+                  "dependsOn": [
+                      "[variables('sqlserverName')]"
+                  ],
+                  "location": "[parameters('location')]",
+                  "name": "AllowAllWindowsAzureIps",
+                  "properties": {
+                      "endIpAddress": "0.0.0.0",
+                      "startIpAddress": "0.0.0.0"
+                  }
+              }
+          ]
+      }
+  ],
+  "outputs": {
+      "vnetname": {
+          "type" : "string",
+          "value" : "[parameters('VNetSettings').name]"
+      },
+      "subnetname": {
+          "type" : "string",
+          "value" : "[parameters('VNetSettings').subnets[3].name]"
+      },
+      "rdpAsgId": {
+          "type" : "string",
+          "value" : "[variables('rdpAsgId')]"
+      }
+  }
 }
-    
+  
