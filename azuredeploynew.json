@@ -122,6 +122,7 @@
         "appNsgId": "[resourceId('Microsoft.Network/networkSecurityGroups',variables('appNsgName'))]",
         "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'mandb')]",
         "storageAccountType": "Standard_LRS",
+        "storageAccountTier": "Standard",
         "imagePublisher": "MicrosoftWindowsServer",
         "imageOffer": "WindowsServer",
         "pipType": "Dynamic",   
@@ -143,7 +144,10 @@
         "vmExtensionName": "dscExtension",
         "vnetName": "[parameters('VNetSettings').name]",
         "dmzSubnet": "[parameters('VNetSettings').subnets[1].name]",
-        "appSubnet": "[parameters('VNetSettings').subnets[2].name]"
+        "appSubnet": "[parameters('VNetSettings').subnets[2].name]",
+        "sqlserverName": "[concat('sqlserver', uniqueString(resourceGroup().id))]",
+        "databaseName": "mitchellsandbutlersdb",
+        "containerName" : "logs"
         
     },
     "resources": [
@@ -302,13 +306,28 @@
         {
             "type": "Microsoft.Storage/storageAccounts",
             "name": "[variables('storageAccountName')]",
-            "apiVersion": "2017-06-01",
+            "apiVersion": "2018-02-01",
             "location": "[parameters('location')]",
+            "kind": "StorageV2",
             "sku": {
                 "name": "[variables('storageAccountType')]"
             },
-            "kind": "Storage",
-            "properties": {}
+            "properties": {
+                "accessTier": "Cool"
+            },
+            "resources": [
+                {
+                    "name": "[concat('default/', variables('containerName'))]",
+                    "type": "blobServices/containers",
+                    "apiVersion": "2018-03-01-preview",
+                    "dependsOn": [
+                        "[variables('storageAccountName')]"
+                    ],
+                    "properties": {
+                        "publicAccess": "None"
+                    } 
+                }
+            ]    
         },
         {
             "condition": "[variables('pip?')]",
@@ -693,6 +712,53 @@
                 },
                 "protectedSettings": null
             }
+        },
+        {
+            "name": "[variables('sqlserverName')]",
+            "type": "Microsoft.Sql/servers",
+            "location": "[parameters('location')]",
+            "tags": {
+                "displayName": "SqlServer"
+            },
+            "apiVersion": "2014-04-01",
+            "properties": {
+                "administratorLogin": "[parameters('adminUsername')]",
+                "administratorLoginPassword": "[parameters('adminPassword')]",
+                "version": "12.0"
+            },
+            "resources": [
+                {
+                    "name": "[variables('databaseName')]",
+                    "type": "databases",
+                    "location": "[parameters('location')]",
+                    "tags": {
+                        "displayName": "Database"
+                    },
+                    "apiVersion": "2015-01-01",
+                    "dependsOn": [
+                        "[variables('sqlserverName')]"
+                    ],
+                    "properties": {
+                        "edition": "Basic",
+                        "collation": "SQL_Latin1_General_CP1_CI_AS",
+                        "maxSizeBytes": "1073741824",
+                        "requestedServiceObjectiveName": "Basic"
+                    }
+                },
+                {
+                    "type": "firewallrules",
+                    "apiVersion": "2014-04-01",
+                    "dependsOn": [
+                        "[variables('sqlserverName')]"
+                    ],
+                    "location": "[parameters('location')]",
+                    "name": "AllowAllWindowsAzureIps",
+                    "properties": {
+                        "endIpAddress": "0.0.0.0",
+                        "startIpAddress": "0.0.0.0"
+                    }
+                }
+            ]
         }
     ],
     "outputs": {
