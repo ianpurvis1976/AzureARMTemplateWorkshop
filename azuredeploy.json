@@ -350,8 +350,7 @@
           "dependsOn": [
               "[variables('pipName')]",
               "[resourceId('Microsoft.Network/virtualNetworks/',variables('vnetName'))]",
-              "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('rdpNsgName'))]",
-              "[resourceId('2a9ef736-6145-4d3a-ad1b-a1da20b06311','MitchellsAndButlersRG','Microsoft.Network/virtualNetworks',variables('vnetName'))]"
+              "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('rdpNsgName'))]"
           ],
           "properties": {
               "ipConfigurations": [
