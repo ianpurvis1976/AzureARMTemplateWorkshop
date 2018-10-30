@@ -109,7 +109,36 @@
               "description": "DSC configuration function to call"
           }
       },
-      "VNetSettings":{"type":"object"}
+      "departmentName": {
+            "type": "string",
+            "defaultValue": "myDepartment",
+            "metadata": {
+            "description": "Name of the department"
+            }
+      },
+      "createdBy": {
+        "type": "string",
+        "defaultValue": "createdByMe",
+        "metadata": {
+        "description": "Name of deployer"
+        }
+      },
+      "applicationName": {
+        "type": "string",
+        "defaultValue": "myApplication",
+        "metadata": {
+        "description": "Name of the application"
+        }
+      },
+      "VNetSettings":{"type":"object"},
+      "tags": { 
+           "type": "array", 
+           "defaultValue": { 
+                "Department": "[parameters('departmentName')]" , 
+                "Application": "[parameters('applicationName')]",
+                "CreatedBy": "[parameters('createdBy')]"
+            } 
+      }
   },
   "variables": {
       "rdpAsgName": "rdpServersAsg",
@@ -156,7 +185,17 @@
           "type": "Microsoft.Network/applicationSecurityGroups",
           "apiVersion": "2018-08-01",
           "location": "[parameters('location')]",
-          "properties": {}
+          "name": "tagtest",
+          "tags": {
+              "copy" : {
+                    "count": "[length(parameters('VNetSettings'))]",
+                    "temp1": "[parameters('tags')[copyIndex()]]",
+                    "temp2": "[parameters('tags')[copyIndex()]]"
+                },
+                "temp1" : "temp2"
+           },
+            "properties": {}
+     
       },
       {
           "comments": "Network Security Group",
@@ -192,7 +231,7 @@
                       "name": "AllowRDPForIan",
                       "properties": {
                           "description": "Allow RDP traffic to web servers",
-                          "sourceAddressPrefix": "5.69.243.59",
+                          "sourceAddressPrefix": "155.69.243.59",
                           "sourcePortRange": "*",
                           "direction": "Inbound",
                           "access": "Allow",
@@ -268,7 +307,7 @@
                       "name": "AllowRDPForIan",
                       "properties": {
                           "description": "Allow RDP traffic to web servers",
-                          "sourceAddressPrefix": "5.69.243.59",
+                          "sourceAddressPrefix": "155.69.243.59",
                           "sourcePortRange": "*",
                           "direction": "Inbound",
                           "access": "Allow",
